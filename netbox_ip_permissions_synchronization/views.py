@@ -126,7 +126,7 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         )
                         ips_in_prefix.append(ip_info)
                         logger.info(f"Found IP in prefix: {ip.address}")
-                except (ValueError, AttributeError) as e:
+                except (ValueError, AttributeError):
                     continue
 
             logger.info(f"Total IPs in prefix: {len(ips_in_prefix)}")
