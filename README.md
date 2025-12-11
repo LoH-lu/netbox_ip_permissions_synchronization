@@ -1,0 +1,2 @@
+# netbox_ip_permissions_synchronization
+Custom usage for permissions management
