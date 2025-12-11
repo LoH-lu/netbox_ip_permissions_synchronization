@@ -1,0 +1,121 @@
+name: Release to PyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Type of version bump'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  calculate-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      new_version: ${{ steps.calc_version.outputs.new_version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Make version script executable
+        run: chmod +x scripts/calculate_version.sh
+
+      - name: Calculate release version
+        id: calc_version
+        run: |
+          ./scripts/calculate_version.sh \
+            --type release \
+            --bump "${{ github.event.inputs.release_type }}"
+
+      - name: Check if tag already exists remotely
+        run: |
+          new_version="${{ steps.calc_version.outputs.new_version }}"
+          if git ls-remote --tags origin | grep -q "refs/tags/$new_version$"; then
+            echo "::error::Tag $new_version already exists on remote!"
+            echo "::error::This may indicate a previous release attempt."
+            echo "::error::Please use a different version or delete the remote tag first."
+            exit 1
+          fi
+          echo "✅ Tag $new_version does not exist remotely"
+
+  test-and-build:
+    needs: [calculate-version]
+    uses: ./.github/workflows/_reusable-test-build.yml
+    with:
+      python_version: '3.11'
+      test_path: '.'
+      artifact_version: ${{ needs.calculate-version.outputs.new_version }}
+
+  publish-to-pypi:
+    name: Publish to PyPI
+    needs: [calculate-version, test-and-build]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # For PyPI Trusted Publishing
+      contents: write  # For pushing tags and creating releases
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: false
+
+      - name: Create and push tag
+        run: |
+          new_version="${{ needs.calculate-version.outputs.new_version }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "$new_version" -m "Release $new_version"
+          git push origin "$new_version"
+
+          echo "✅ Created and pushed tag: $new_version"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        run: |
+          new_version="${{ needs.calculate-version.outputs.new_version }}"
+          gh release create "$new_version" \
+            --title "Release $new_version" \
+            --generate-notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          new_version="${{ needs.calculate-version.outputs.new_version }}"
+          echo "### Release Published Successfully :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: $new_version" >> $GITHUB_STEP_SUMMARY
+          echo "**Type**: ${{ github.event.inputs.release_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Steps completed**:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Tests passed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Package built" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Published to PyPI" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Tag pushed to repository" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ GitHub Release created" >> $GITHUB_STEP_SUMMARY

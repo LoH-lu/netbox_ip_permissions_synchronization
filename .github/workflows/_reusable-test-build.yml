@@ -1,0 +1,65 @@
+name: Reusable Test and Build
+
+on:
+  workflow_call:
+    inputs:
+      python_version:
+        description: 'Python version to use'
+        required: false
+        type: string
+        default: '3.11'
+      test_path:
+        description: 'Path to tests'
+        required: false
+        type: string
+        default: '.'
+      artifact_version:
+        description: 'Version to use for the artifact (overrides setuptools_scm detection)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # For setuptools_scm
+          fetch-tags: true
+
+      - name: Set up Python ${{ inputs.python_version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+          pip install .[test]
+
+      - name: Lint with Ruff
+        run: |
+          python -m pip install ruff
+          ruff check .
+          ruff format --check .
+
+      - name: Run tests with pytest
+        run: python -m pytest ${{ inputs.test_path }}
+
+      - name: Build package
+        env:
+          # Override version detection if artifact_version is provided
+          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ inputs.artifact_version }}
+        run: python -m build
+
+      - name: Store the distribution packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
