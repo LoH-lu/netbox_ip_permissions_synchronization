@@ -1,0 +1,215 @@
+{% extends 'base/layout.html' %}
+
+{% block title %}{{ prefix }} - IP Permissions Synchronization{% endblock %}
+
+{% block header %}
+    <nav class="breadcrumb-container px-3" aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'ipam:prefix_list' %}">Prefixes</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'ipam:prefix' pk=prefix.id %}">{{ prefix.prefix }}</a></li>
+        </ol>
+    </nav>
+    {{ block.super }}
+{% endblock %}
+
+{% block content %}
+<style>
+    .checkbox-group {
+        position: absolute;
+    }
+	.sync-status {
+		padding: 10px;
+		border-radius: 4px;
+		margin-bottom: 20px;
+	}
+
+	/* Mismatch */
+	.sync-status.needs-sync {
+		background-color: var(--tblr-warning-bg, var(--bs-warning-bg-subtle));
+		border: 1px solid var(--tblr-warning, var(--bs-warning-border-subtle));
+	}
+
+	/* Synchronized */
+	.sync-status.synced {
+		background-color: var(--tblr-success-bg, var(--bs-success-bg-subtle));
+		border: 1px solid var(--tblr-success, var(--bs-success-border-subtle));
+	}
+
+	/* Permission badge & generic tags */
+	.permission-badge {
+		display: inline-block;
+		background-color: var(--tblr-secondary-bg, var(--bs-secondary-bg));
+		color: var(--tblr-body-color, var(--bs-body-color));
+		padding: 4px 8px;
+		border-radius: 3px;
+		font-size: 0.85em;
+		margin: 2px;
+		font-family: monospace;
+	}
+	}
+    .ip-table {
+        width: 100%;
+        margin-top: 20px;
+    }
+</style>
+
+<div class="card">
+    <div class="card-header">
+        <h4>Prefix Information</h4>
+    </div>
+    <div class="card-body">
+        <table class="table table-sm">
+            <tr>
+                <th>Prefix:</th>
+                <td><strong>{{ prefix.prefix }}</strong></td>
+            </tr>
+            <tr>
+                <th>Tenant:</th>
+                <td>{% if prefix.tenant_name %}{{ prefix.tenant_name }}{% else %}<em>None</em>{% endif %}</td>
+            </tr>
+            <tr>
+                <th>Tenant Permissions (RW):</th>
+                <td>
+                    {% if prefix.tenant_permissions %}
+                        <span class="permission-badge">{{ prefix.tenant_permissions }}</span>
+                    {% else %}
+                        <em>Not set</em>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th>Tenant Permissions (RO):</th>
+                <td>
+                    {% if prefix.tenant_permissions_ro %}
+                        <span class="permission-badge">{{ prefix.tenant_permissions_ro }}</span>
+                    {% else %}
+                        <em>Not set</em>
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <div class="card-header">
+        <h4>IP Addresses Status</h4>
+    </div>
+    <div class="card-body">
+        <p>Total IP Addresses in Prefix: <strong>{{ ips_total }}</strong></p>
+        <p>IP Addresses needing synchronization: <strong class="text-warning">{{ ips_to_sync|length }}</strong></p>
+        <p>IP Addresses already synchronized: <strong class="text-success">{{ ips_synced|length }}</strong></p>
+    </div>
+</div>
+
+{% if ips_to_sync %}
+<div class="card" style="margin-top: 20px;">
+    <div class="card-header">
+        <h4>IP Addresses Needing Synchronization</h4>
+    </div>
+    <div class="card-body">
+        <table class="table table-hover ip-table">
+            <thead>
+                <tr>
+                    <th>IP Address</th>
+                    <th>Current Tenant</th>
+                    <th>Current Permissions (RW)</th>
+                    <th>Current Permissions (RO)</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ip in ips_to_sync %}
+                <tr class="sync-status needs-sync">
+                    <td><strong>{{ ip.address }}</strong></td>
+                    <td>{% if ip.tenant_name %}{{ ip.tenant_name }}{% else %}<em>None</em>{% endif %}</td>
+                    <td>
+                        {% if ip.tenant_permissions %}
+                            <span class="permission-badge">{{ ip.tenant_permissions }}</span>
+                        {% else %}
+                            <em>Not set</em>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if ip.tenant_permissions_ro %}
+                            <span class="permission-badge">{{ ip.tenant_permissions_ro }}</span>
+                        {% else %}
+                            <em>Not set</em>
+                        {% endif %}
+                    </td>
+                    <td><span class="badge badge-warning">Mismatch</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <div class="text-right" style="margin-top: 20px;">
+            <form method="post" style="display: inline;">
+                {% csrf_token %}
+                <button type="submit" name="sync_all" value="true" class="btn btn-success">
+                    <i class="mdi mdi-sync"></i> Sync All IPs
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-success" style="margin-top: 20px;">
+    <i class="mdi mdi-check-circle"></i> All IP addresses are already synchronized with the prefix permissions!
+</div>
+{% endif %}
+
+{% if ips_synced %}
+<div class="card" style="margin-top: 20px;">
+    <div class="card-header">
+        <h4>Already Synchronized IP Addresses</h4>
+    </div>
+    <div class="card-body">
+        <table class="table table-sm ip-table">
+            <thead>
+                <tr>
+                    <th>IP Address</th>
+                    <th>Tenant</th>
+                    <th>Permissions (RW)</th>
+                    <th>Permissions (RO)</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ip in ips_synced %}
+                <tr class="sync-status synced">
+                    <td><strong>{{ ip.address }}</strong></td>
+                    <td>{% if ip.tenant_name %}{{ ip.tenant_name }}{% else %}<em>None</em>{% endif %}</td>
+                    <td>
+                        {% if ip.tenant_permissions %}
+                            <span class="permission-badge">{{ ip.tenant_permissions }}</span>
+                        {% else %}
+                            <em>Not set</em>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if ip.tenant_permissions_ro %}
+                            <span class="permission-badge">{{ ip.tenant_permissions_ro }}</span>
+                        {% else %}
+                            <em>Not set</em>
+                        {% endif %}
+                    </td>
+                    <td><span class="badge badge-success">Synchronized</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<script>
+document.getElementById('select-all-checkbox').addEventListener('change', function() {
+    const checkboxes = document.querySelectorAll('.ip-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = this.checked;
+    });
+});
+</script>
+
+{% endblock %}
