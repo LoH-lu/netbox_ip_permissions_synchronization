@@ -78,7 +78,7 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 tenant_permissions_ro=prefix_permissions_ro_display
             )
 
-            # Get all IP addresses and filter by prefix network
+            # Get prefix network
             try:
                 prefix_net = ip_network(prefix.prefix, strict=False)
             except ValueError as e:
@@ -86,12 +86,27 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 messages.error(request, f"Invalid prefix format: {e}")
                 return redirect('ipam:prefix_list')
             
+            # Query IPs more efficiently using prefix relationship if available
+            # NetBox IPAddress model typically has a parent relationship
             ips_in_prefix = []
-            all_ips = IPAddress.objects.all()
             
-            logger.info(f"Checking {all_ips.count()} IP addresses against prefix {prefix.prefix}")
+            # Try to use the relationship if available (faster)
+            try:
+                if hasattr(prefix, 'ip_addresses'):
+                    # Some NetBox versions have this relationship
+                    query_ips = prefix.ip_addresses.all()
+                    logger.info(f"Using prefix.ip_addresses relationship, found {query_ips.count()} IPs")
+                else:
+                    # Fallback: filter by prefix family to reduce search space
+                    query_ips = IPAddress.objects.filter(
+                        address__family=prefix.prefix.version
+                    )
+                    logger.info(f"Filtering by family, checking {query_ips.count()} IP addresses against prefix {prefix.prefix}")
+            except Exception as e:
+                logger.warning(f"Could not optimize IP query: {e}, falling back to all IPs")
+                query_ips = IPAddress.objects.all()
             
-            for ip in all_ips:
+            for ip in query_ips:
                 try:
                     # Parse the IP address (remove CIDR if present)
                     ip_str = str(ip.address).split('/')[0]
