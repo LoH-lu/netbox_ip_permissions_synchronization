@@ -18,7 +18,7 @@ Tested with NetBox versions 4.3.7.
 
 ## Installation
 
-If your NetBox 4 installation uses virtualenv, activate it like this:
+If your NetBox installation uses virtualenv, activate it like this:
 
 ```bash
 source /opt/netbox/venv/bin/activate
@@ -59,16 +59,15 @@ The synchronization page will show:
 - IP addresses that need synchronization (highlighted in yellow)
 - IP addresses that are already synchronized (highlighted in green)
 
-Select the IP addresses you want to synchronize using the checkboxes, then click either:
-- **"Sync Selected IPs"** - Synchronize only the checked IP addresses
+Select the IP addresses you want to synchronize using the checkboxes, then click:
 - **"Sync All IPs"** - Synchronize all IP addresses in the prefix
 
 ## Custom Fields Required
 
 This plugin requires the following custom fields to be created in NetBox:
 
-1. **tenant_permissions** - Text or object field to store read-write permission assignments
-2. **tenant_permissions_ro** - Text or object field to store read-only permission assignments
+1. **tenant_permissions** - Multiple objects (Tenant) field to store read-write permission assignments
+2. **tenant_permissions_ro** - Multiple objects (Tenant) field to store read-only permission assignments
 
 These fields should be applied to both:
 - IPAM > Prefix
