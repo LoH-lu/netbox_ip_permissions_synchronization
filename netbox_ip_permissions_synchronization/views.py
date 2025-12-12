@@ -139,7 +139,7 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 needs_sync = (
                     ip_info.tenant_permissions != prefix_info.tenant_permissions or
                     ip_info.tenant_permissions_ro != prefix_info.tenant_permissions_ro or
-                    (prefix_info.tenant_id and ip_info.tenant_id != prefix_info.tenant_id)
+                    (ip_info.tenant_id != prefix_info.tenant_id)
                 )
 
                 if needs_sync:
@@ -215,14 +215,14 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     
                     changed = False
                     
-                    # Update tenant if prefix has one and it differs
-                    if prefix_tenant and ip.tenant_id != prefix_tenant.id:
-                        ip.tenant = prefix_tenant
+                    # sync even when prefix_tenant is None (clears tenant)
+                    if ip.tenant_id != (prefix_tenant.id if prefix_tenant else None):
+                        ip.tenant = prefix_tenant  # assigns None correctly
                         changed = True
                     
                     # Update custom fields using bracket notation
                     try:
-                        if prefix_permissions is not None and current_perms != prefix_permissions:
+                        if current_perms != prefix_permissions:
                             if hasattr(ip, "custom_field_data"):
                                 ip.custom_field_data["tenant_permissions"] = prefix_permissions
                             else:
