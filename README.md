@@ -123,7 +123,7 @@ To use this plugin, users need the following permissions:
 
 ## Support
 
-For issues, feature requests, or contributions, please visit the [project repository](https://github.com/loris-henrion/netbox-ip-permissions-synchronization).
+For issues, feature requests, or contributions, please visit the [project repository](https://github.com/LoH-lu/netbox_ip_permissions_synchronization/).
 
 ## License
 
