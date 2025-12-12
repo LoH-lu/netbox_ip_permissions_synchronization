@@ -3,16 +3,20 @@ from netbox.plugins import PluginTemplateExtension
 
 logger = logging.getLogger(__name__)
 
-
 class PrefixViewExtension(PluginTemplateExtension):
     models = ['ipam.prefix']
-
+    
     def buttons(self):
         """Implements a sync IP permissions button at the top of the page"""
         try:
             obj = self.context.get('object')
             if not obj:
                 logger.warning("No object in context for PrefixViewExtension")
+                return None
+            
+            # Don't show button for container prefixes
+            if obj.status == 'container':
+                logger.info(f"Skipping button for container prefix: {obj}")
                 return None
             
             logger.info(f"Rendering button for prefix: {obj}")
@@ -25,6 +29,5 @@ class PrefixViewExtension(PluginTemplateExtension):
         except Exception as e:
             logger.error(f"Error in PrefixViewExtension.buttons(): {str(e)}", exc_info=True)
             return None
-
 
 template_extensions = [PrefixViewExtension]
