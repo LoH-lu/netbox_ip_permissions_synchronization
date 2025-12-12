@@ -13,7 +13,7 @@ class PrefixViewExtension(PluginTemplateExtension):
         try:
             obj = self.context.get('object')
             if not obj:
-                return None
+                return ""
 
             # Directly get the status value
             raw_status_value = obj.status
@@ -22,7 +22,7 @@ class PrefixViewExtension(PluginTemplateExtension):
             # Skip rendering if the status is 'container'
             if raw_status_value == 'container':
                 logger.info("Status is 'container', skipping button render")
-                return None
+                return ""
 
             logger.info("Status is not 'container', proceeding with button render")
 
@@ -38,6 +38,6 @@ class PrefixViewExtension(PluginTemplateExtension):
         except Exception as e:
             logger.error(f"Unexpected error in PrefixViewExtension.buttons(): {type(e).__name__}: {str(e)}")
             logger.error(f"Traceback: {traceback.format_exc()}")
-            return None
+            return ""
 
 template_extensions = [PrefixViewExtension]
