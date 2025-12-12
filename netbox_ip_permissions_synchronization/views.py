@@ -178,107 +178,72 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
         except Prefix.DoesNotExist:
             messages.error(request, "Prefix not found")
             return redirect('ipam:prefix_list')
-
-        # Don't allow syncing container prefixes
+    
         if prefix.status == 'container':
             messages.error(request, "Cannot synchronize permissions for container prefixes")
             return redirect('ipam:prefix_list')
-
+    
         try:
-            sync_all = request.POST.get('sync_all') == 'true'
-            selected_ip_ids = request.POST.getlist('selected_ips')
-            selected_ip_ids = [int(ip_id) for ip_id in selected_ip_ids if ip_id.isdigit()]
-
             # Get prefix permissions and tenant
             prefix_tenant = prefix.tenant
             prefix_permissions = get_custom_field_value(prefix, "tenant_permissions")
             prefix_permissions_ro = get_custom_field_value(prefix, "tenant_permissions_ro")
-
-            # Get IPs in prefix
-            _, prefix_net = get_ips_in_prefix(prefix)
-
-            if sync_all:
-                ips_query = IPAddress.objects.all()
-            else:
-                ips_query = IPAddress.objects.filter(id__in=selected_ip_ids)
-
-            # Filter to only IPs in this prefix
-            ips_to_update = []
-            for ip in ips_query:
-                try:
-                    ip_str = str(ip.address).split('/')[0]
-                    ip_addr = ip_addr_obj(ip_str)
-                    if ip_addr in prefix_net:
-                        ips_to_update.append(ip)
-                except (ValueError, AttributeError):
-                    continue
-
-            # Update IPs
+    
+            # Get all IPs in the prefix
+            ips_in_prefix, prefix_net = get_ips_in_prefix(prefix)
+    
             updated_count = 0
             failed_count = 0
-            
-            for ip in ips_to_update:
+    
+            for ip_info in ips_in_prefix:
                 try:
-                    # Get current values using our helper function
-                    current_perms = get_custom_field_value(ip, 'tenant_permissions')
-                    current_perms_ro = get_custom_field_value(ip, 'tenant_permissions_ro')
-                    
+                    ip = IPAddress.objects.get(id=ip_info.id)
                     changed = False
-                    
-                    # Sync tenant (even when prefix_tenant is None, which clears tenant)
+    
+                    # Sync tenant
                     if ip.tenant_id != (prefix_tenant.id if prefix_tenant else None):
                         ip.tenant = prefix_tenant
                         changed = True
-                    
-                    # Update custom fields
-                    try:
-                        if current_perms != prefix_permissions:
-                            if hasattr(ip, "custom_field_data"):
-                                ip.custom_field_data["tenant_permissions"] = prefix_permissions if prefix_permissions not in (None, [], "", {}) else []
-                            else:
-                                ip.cf["tenant_permissions"] = prefix_permissions if prefix_permissions not in (None, [], "", {}) else []
+    
+                    # Sync custom fields
+                    if getattr(ip, "custom_field_data", None) is not None:
+                        if get_custom_field_value(ip, "tenant_permissions") != prefix_permissions:
+                            ip.custom_field_data["tenant_permissions"] = prefix_permissions or []
                             changed = True
-                            logger.info(f"Setting tenant_permissions to {prefix_permissions}")
-                    except Exception as e:
-                        logger.warning(f"Could not set tenant_permissions: {e}")
-                    
-                    try:
-                        if current_perms_ro != prefix_permissions_ro:
-                            if hasattr(ip, "custom_field_data"):
-                                ip.custom_field_data["tenant_permissions_ro"] = prefix_permissions_ro if prefix_permissions_ro not in (None, [], "", {}) else []
-                            else:
-                                ip.cf["tenant_permissions_ro"] = prefix_permissions_ro if prefix_permissions_ro not in (None, [], "", {}) else []
+                        if get_custom_field_value(ip, "tenant_permissions_ro") != prefix_permissions_ro:
+                            ip.custom_field_data["tenant_permissions_ro"] = prefix_permissions_ro or []
                             changed = True
-                            logger.info(f"Setting tenant_permissions_ro to {prefix_permissions_ro}")
-                    except Exception as e:
-                        logger.warning(f"Could not set tenant_permissions_ro: {e}")
-                    
-                    # Save if anything changed
+                    else:
+                        if getattr(ip, "cf", None) is not None:
+                            if get_custom_field_value(ip, "tenant_permissions") != prefix_permissions:
+                                ip.cf["tenant_permissions"] = prefix_permissions or []
+                                changed = True
+                            if get_custom_field_value(ip, "tenant_permissions_ro") != prefix_permissions_ro:
+                                ip.cf["tenant_permissions_ro"] = prefix_permissions_ro or []
+                                changed = True
+    
                     if changed:
                         ip.save()
                         updated_count += 1
-                        logger.info(f"Successfully updated IP {ip.id}")
-                    else:
-                        logger.info(f"IP {ip.id} already synchronized")
-                    
+    
                 except Exception as e:
                     failed_count += 1
-                    logger.error(f"Error updating IP {ip.id}: {str(e)}", exc_info=True)
-
-            # Generate result messages
+                    logger.error(f"Error updating IP {ip_info.id}: {str(e)}", exc_info=True)
+    
+            # Feedback messages
             message_parts = []
             if updated_count > 0:
                 message_parts.append(f"synchronized {updated_count} IP address(es)")
             if failed_count > 0:
                 message_parts.append(f"failed to update {failed_count} IP address(es)")
-            
+    
             if message_parts:
                 messages.success(request, f"Successfully {' and '.join(message_parts)}")
             else:
                 messages.info(request, "No changes needed")
-
+    
             return redirect(request.path)
-
+    
         except Exception as e:
             logger.error(f"Error in POST request: {str(e)}", exc_info=True)
             messages.error(request, f"An error occurred: {str(e)}")
