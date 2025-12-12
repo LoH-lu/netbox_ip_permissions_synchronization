@@ -1,3 +1,4 @@
+## template_content.py
 import logging
 from netbox.plugins import PluginTemplateExtension
 
@@ -15,9 +16,12 @@ class PrefixViewExtension(PluginTemplateExtension):
                 return None
             
             # Don't show button for container prefixes
-            if hasattr(obj, 'status') and obj.status and obj.status == 'container':
-                logger.info(f"Skipping button for container prefix: {obj}")
-                return None
+            if hasattr(obj, 'status') and obj.status:
+                # Status can be a dict with 'value' key or a string
+                status_value = obj.status.get('value') if isinstance(obj.status, dict) else obj.status
+                if status_value == 'container':
+                    logger.info(f"Skipping button for container prefix: {obj}")
+                    return None
             
             logger.info(f"Rendering button for prefix: {obj}")
             return self.render(
