@@ -9,6 +9,7 @@ setup(
     description='Syncing permissions on IP Addresses with those from their corresponding Prefix in NetBox',
     long_description=long_description,
     long_description_content_type='text/markdown',
+    url='https://github.com/LoH-lu/netbox_ip_permissions_synchronization/',
     author='Loris Henrion',
     author_email='loris_henrion@bce.lu',
     license='GPL-3.0',
