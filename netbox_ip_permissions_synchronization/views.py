@@ -1,3 +1,4 @@
+## views.py
 import logging
 from django.shortcuts import render, redirect
 from django.views.generic import View
@@ -49,6 +50,11 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
             prefix = Prefix.objects.get(id=prefix_id)
         except Prefix.DoesNotExist:
             messages.error(request, f"Prefix with ID {prefix_id} not found")
+            return redirect('ipam:prefix_list')
+
+        # Don't allow viewing container prefixes
+        if prefix.status == 'container':
+            messages.error(request, "Cannot synchronize permissions for container prefixes")
             return redirect('ipam:prefix_list')
 
         try:
@@ -155,6 +161,11 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
             prefix = Prefix.objects.get(id=prefix_id)
         except Prefix.DoesNotExist:
             messages.error(request, "Prefix not found")
+            return redirect('ipam:prefix_list')
+
+        # Don't allow syncing container prefixes
+        if prefix.status == 'container':
+            messages.error(request, "Cannot synchronize permissions for container prefixes")
             return redirect('ipam:prefix_list')
 
         try:
