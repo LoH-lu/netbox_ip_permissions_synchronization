@@ -1,8 +1,7 @@
 import os
 from setuptools import setup
 
-# Read version and metadata from _version.py
-_version_file = os.path.join(os.path.dirname(__file__), "_version.py")
+_version_file = os.path.join(os.path.dirname(__file__), "netbox_ip_permissions_synchronization", "_version.py")
 _version_data = {}
 with open(_version_file, encoding="utf-8") as f:
     exec(f.read(), _version_data)
