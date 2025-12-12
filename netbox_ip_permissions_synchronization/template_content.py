@@ -1,3 +1,4 @@
+## template_content.py
 import logging
 from netbox.plugins import PluginTemplateExtension
 
