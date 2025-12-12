@@ -1,4 +1,3 @@
-## views.py
 import logging
 from django.shortcuts import render, redirect
 from django.views.generic import View
@@ -32,6 +31,15 @@ def get_custom_field_value(obj, field_name):
     return None
 
 
+def safe_to_string(value):
+    """Safely convert value to string, handling None"""
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return ", ".join([str(p.name) if hasattr(p, 'name') else str(p) for p in value])
+    return str(value)
+
+
 class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
     """Synchronize IP address permissions from their parent prefix"""
     permission_required = ("ipam.view_ipaddress", "ipam.change_ipaddress", "ipam.view_prefix")
@@ -52,19 +60,8 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
             prefix_permissions_ro = get_custom_field_value(prefix, "tenant_permissions_ro")
             
             # Convert to display format
-            prefix_permissions_display = ""
-            if prefix_permissions:
-                if isinstance(prefix_permissions, list):
-                    prefix_permissions_display = ", ".join([str(p.name) if hasattr(p, 'name') else str(p) for p in prefix_permissions])
-                else:
-                    prefix_permissions_display = str(prefix_permissions)
-            
-            prefix_permissions_ro_display = ""
-            if prefix_permissions_ro:
-                if isinstance(prefix_permissions_ro, list):
-                    prefix_permissions_ro_display = ", ".join([str(p.name) if hasattr(p, 'name') else str(p) for p in prefix_permissions_ro])
-                else:
-                    prefix_permissions_ro_display = str(prefix_permissions_ro)
+            prefix_permissions_display = safe_to_string(prefix_permissions)
+            prefix_permissions_ro_display = safe_to_string(prefix_permissions_ro)
             
             prefix_info = PrefixInfo(
                 id=prefix.id,
@@ -102,19 +99,8 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         ip_permissions_ro = get_custom_field_value(ip, "tenant_permissions_ro")
                         
                         # Convert to display format
-                        ip_permissions_display = ""
-                        if ip_permissions:
-                            if isinstance(ip_permissions, list):
-                                ip_permissions_display = ", ".join([str(p.name) if hasattr(p, 'name') else str(p) for p in ip_permissions])
-                            else:
-                                ip_permissions_display = str(ip_permissions)
-                        
-                        ip_permissions_ro_display = ""
-                        if ip_permissions_ro:
-                            if isinstance(ip_permissions_ro, list):
-                                ip_permissions_ro_display = ", ".join([str(p.name) if hasattr(p, 'name') else str(p) for p in ip_permissions_ro])
-                            else:
-                                ip_permissions_ro_display = str(ip_permissions_ro)
+                        ip_permissions_display = safe_to_string(ip_permissions)
+                        ip_permissions_ro_display = safe_to_string(ip_permissions_ro)
                         
                         ip_info = IPAddressInfo(
                             id=ip.id,
