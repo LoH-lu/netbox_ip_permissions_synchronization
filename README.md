@@ -128,3 +128,9 @@ For issues, feature requests, or contributions, please visit the [project reposi
 ## License
 
 GNU General Public License v3.0 - See LICENSE file for details.
+
+## Acknowledgements
+
+This project was inspired in part by the work done in the `netbox-interface-synchronization` plugin by NetTech2001.
+Their approach to interface synchronization in NetBox provided valuable guidance when designing the permission-sync logic for IP addresses.
+A big thanks to them for sharing their project with the community!
