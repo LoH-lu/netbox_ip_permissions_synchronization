@@ -29,24 +29,28 @@ class PrefixViewExtension(PluginTemplateExtension):
                 return None
             
             logger.info(f"Step 3b: Object has 'status' attribute")
-            logger.info(f"Step 3c: Status value type: {type(obj.status)}")
-            logger.info(f"Step 3d: Status value: {obj.status}")
             
             status_value = None
             if obj.status is None:
                 logger.info("Step 4: Status is None, allowing button to render")
             elif isinstance(obj.status, dict):
                 logger.info(f"Step 4a: Status is dict: {obj.status}")
-                status_value = obj.status.get('value')
+                # Ensure a default string if 'value' is missing, though usually present
+                status_value = obj.status.get('value', None) 
                 logger.info(f"Step 4b: Extracted status value: {status_value}")
             else:
                 logger.info(f"Step 4c: Status is string or other type: {obj.status}")
-                status_value = str(obj.status)
-                logger.info(f"Step 4d: Converted status to string: {status_value}")
-            
+                status_value = obj.status
+                logger.info(f"Step 4d: Used status value: {status_value}")
+                
+            # --- FIX APPLIED HERE ---
+            # Ensure status_value is a string for comparison and logging, 
+            # using an empty string if it's None.
+            safe_status_value = str(status_value) if status_value is not None else ""
+            logger.info(f"Step 5: Comparing safe_status_value '{safe_status_value}' with 'container'")
+
             # Check if it's a container
-            logger.info(f"Step 5: Comparing status_value '{status_value}' with 'container'")
-            if status_value == 'container':
+            if safe_status_value == 'container':
                 logger.info(f"Step 5a: Status is 'container', skipping button render")
                 return None
             
@@ -67,7 +71,8 @@ class PrefixViewExtension(PluginTemplateExtension):
             logger.error(f"Traceback: {traceback.format_exc()}")
             return None
         except TypeError as te:
-            logger.error(f"TypeError in PrefixViewExtension.buttons(): {str(te)}")
+            # Added log to show where the original error was caught
+            logger.error(f"Original TypeError in PrefixViewExtension.buttons(): {str(te)}") 
             logger.error(f"Traceback: {traceback.format_exc()}")
             return None
         except Exception as e:
