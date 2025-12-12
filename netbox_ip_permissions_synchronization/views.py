@@ -224,21 +224,33 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     try:
                         if current_perms != prefix_permissions:
                             if hasattr(ip, "custom_field_data"):
-                                ip.custom_field_data["tenant_permissions"] = prefix_permissions
+                                if prefix_permissions in (None, [], "", {}):
+                                    ip.custom_field_data["tenant_permissions"] = []
+                                else:
+                                    ip.custom_field_data["tenant_permissions"] = prefix_permissions
                             else:
-                                # fallback for old NetBox versions
-                                ip.cf["tenant_permissions"] = prefix_permissions
+                                # for older NetBox
+                                if prefix_permissions in (None, [], "", {}):
+                                    ip.cf["tenant_permissions"] = []
+                                else:
+                                    ip.cf["tenant_permissions"] = prefix_permissions
                             changed = True
                             logger.info(f"Setting tenant_permissions to {prefix_permissions}")
                     except Exception as e:
                         logger.warning(f"Could not set tenant_permissions: {e}")
                     
                     try:
-                        if prefix_permissions_ro is not None and current_perms_ro != prefix_permissions_ro:
+                        if current_perms_ro != prefix_permissions_ro:
                             if hasattr(ip, "custom_field_data"):
-                                ip.custom_field_data["tenant_permissions_ro"] = prefix_permissions_ro
+                                if prefix_permissions_ro in (None, [], "", {}):
+                                    ip.custom_field_data["tenant_permissions_ro"] = []
+                                else:
+                                    ip.custom_field_data["tenant_permissions_ro"] = prefix_permissions_ro
                             else:
-                                ip.cf["tenant_permissions_ro"] = prefix_permissions_ro
+                                if prefix_permissions_ro in (None, [], "", {}):
+                                    ip.cf["tenant_permissions_ro"] = []
+                                else:
+                                    ip.cf["tenant_permissions_ro"] = prefix_permissions_ro
                             changed = True
                             logger.info(f"Setting tenant_permissions_ro to {prefix_permissions_ro}")
                     except Exception as e:
