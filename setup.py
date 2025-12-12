@@ -5,7 +5,7 @@ with open('README.md', encoding='utf-8') as f:
 
 setup(
     name='netbox_ip_permissions_synchronization',
-    version='0.0.1',
+    version='0.0.2',
     description='Syncing permissions on IP Addresses with those from their corresponding Prefix in NetBox',
     long_description=long_description,
     long_description_content_type='text/markdown',
