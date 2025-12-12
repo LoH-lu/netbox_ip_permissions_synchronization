@@ -47,7 +47,7 @@ PLUGINS = [
 Don't forget to restart NetBox:
 
 ```bash
-sudo systemctl restart netbox
+sudo systemctl restart netbox netbox-rq
 ```
 
 ## Usage
