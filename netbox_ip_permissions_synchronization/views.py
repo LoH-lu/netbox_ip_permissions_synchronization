@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 def get_custom_field_value(obj, field_name):
     """Safely retrieve custom field from NetBox ORM object"""
-
     # NetBox 3.5+ uses custom_field_data
     if hasattr(obj, "custom_field_data"):
         return obj.custom_field_data.get(field_name)
@@ -39,6 +38,64 @@ def safe_to_string(value):
     if isinstance(value, list):
         return ", ".join([str(p.name) if hasattr(p, 'name') else str(p) for p in value])
     return str(value)
+
+
+def get_ips_in_prefix(prefix):
+    """Fetch all IP addresses within a prefix"""
+    try:
+        prefix_net = ip_network(prefix.prefix, strict=False)
+    except ValueError as e:
+        logger.error(f"Invalid prefix: {e}")
+        raise ValueError(f"Invalid prefix format: {e}")
+    
+    ips_in_prefix = []
+    
+    # Try to use the relationship if available (faster)
+    try:
+        if hasattr(prefix, 'ip_addresses'):
+            query_ips = prefix.ip_addresses.all()
+            logger.info(f"Using prefix.ip_addresses relationship, found {query_ips.count()} IPs")
+        else:
+            # Fallback: filter by prefix family to reduce search space
+            query_ips = IPAddress.objects.filter(
+                address__family=prefix.prefix.version
+            )
+            logger.info(f"Filtering by family, checking {query_ips.count()} IP addresses against prefix {prefix.prefix}")
+    except Exception as e:
+        logger.warning(f"Could not optimize IP query: {e}, falling back to all IPs")
+        query_ips = IPAddress.objects.all()
+    
+    for ip in query_ips:
+        try:
+            # Parse the IP address (remove CIDR if present)
+            ip_str = str(ip.address).split('/')[0]
+            ip_addr = ip_addr_obj(ip_str)
+            
+            if ip_addr in prefix_net:
+                ip_tenant = ip.tenant
+                
+                # Get IP custom field values
+                ip_permissions = get_custom_field_value(ip, "tenant_permissions")
+                ip_permissions_ro = get_custom_field_value(ip, "tenant_permissions_ro")
+                
+                # Convert to display format
+                ip_permissions_display = safe_to_string(ip_permissions)
+                ip_permissions_ro_display = safe_to_string(ip_permissions_ro)
+                
+                ip_info = IPAddressInfo(
+                    id=ip.id,
+                    address=str(ip.address),
+                    tenant_id=ip_tenant.id if ip_tenant else None,
+                    tenant_name=ip_tenant.name if ip_tenant else "",
+                    tenant_permissions=ip_permissions_display,
+                    tenant_permissions_ro=ip_permissions_ro_display
+                )
+                ips_in_prefix.append(ip_info)
+                logger.info(f"Found IP in prefix: {ip.address}")
+        except (ValueError, AttributeError):
+            continue
+    
+    return ips_in_prefix, prefix_net
 
 
 class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -78,64 +135,8 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 tenant_permissions_ro=prefix_permissions_ro_display
             )
 
-            # Get prefix network
-            try:
-                prefix_net = ip_network(prefix.prefix, strict=False)
-            except ValueError as e:
-                logger.error(f"Invalid prefix: {e}")
-                messages.error(request, f"Invalid prefix format: {e}")
-                return redirect('ipam:prefix_list')
-            
-            # Query IPs more efficiently using prefix relationship if available
-            # NetBox IPAddress model typically has a parent relationship
-            ips_in_prefix = []
-            
-            # Try to use the relationship if available (faster)
-            try:
-                if hasattr(prefix, 'ip_addresses'):
-                    # Some NetBox versions have this relationship
-                    query_ips = prefix.ip_addresses.all()
-                    logger.info(f"Using prefix.ip_addresses relationship, found {query_ips.count()} IPs")
-                else:
-                    # Fallback: filter by prefix family to reduce search space
-                    query_ips = IPAddress.objects.filter(
-                        address__family=prefix.prefix.version
-                    )
-                    logger.info(f"Filtering by family, checking {query_ips.count()} IP addresses against prefix {prefix.prefix}")
-            except Exception as e:
-                logger.warning(f"Could not optimize IP query: {e}, falling back to all IPs")
-                query_ips = IPAddress.objects.all()
-            
-            for ip in query_ips:
-                try:
-                    # Parse the IP address (remove CIDR if present)
-                    ip_str = str(ip.address).split('/')[0]
-                    ip_addr = ip_addr_obj(ip_str)
-                    
-                    if ip_addr in prefix_net:
-                        ip_tenant = ip.tenant
-                        
-                        # Get IP custom field values
-                        ip_permissions = get_custom_field_value(ip, "tenant_permissions")
-                        ip_permissions_ro = get_custom_field_value(ip, "tenant_permissions_ro")
-                        
-                        # Convert to display format
-                        ip_permissions_display = safe_to_string(ip_permissions)
-                        ip_permissions_ro_display = safe_to_string(ip_permissions_ro)
-                        
-                        ip_info = IPAddressInfo(
-                            id=ip.id,
-                            address=str(ip.address),
-                            tenant_id=ip_tenant.id if ip_tenant else None,
-                            tenant_name=ip_tenant.name if ip_tenant else "",
-                            tenant_permissions=ip_permissions_display,
-                            tenant_permissions_ro=ip_permissions_ro_display
-                        )
-                        ips_in_prefix.append(ip_info)
-                        logger.info(f"Found IP in prefix: {ip.address}")
-                except (ValueError, AttributeError):
-                    continue
-
+            # Get IPs in prefix
+            ips_in_prefix, _ = get_ips_in_prefix(prefix)
             logger.info(f"Total IPs in prefix: {len(ips_in_prefix)}")
 
             # Check which IPs need syncing
@@ -193,18 +194,15 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
             prefix_permissions = get_custom_field_value(prefix, "tenant_permissions")
             prefix_permissions_ro = get_custom_field_value(prefix, "tenant_permissions_ro")
 
-            # Get IPs to update
-            try:
-                prefix_net = ip_network(prefix.prefix, strict=False)
-            except ValueError as e:
-                messages.error(request, f"Invalid prefix format: {e}")
-                return redirect(request.path)
+            # Get IPs in prefix
+            _, prefix_net = get_ips_in_prefix(prefix)
 
             if sync_all:
                 ips_query = IPAddress.objects.all()
             else:
                 ips_query = IPAddress.objects.filter(id__in=selected_ip_ids)
 
+            # Filter to only IPs in this prefix
             ips_to_update = []
             for ip in ips_query:
                 try:
@@ -227,25 +225,18 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     
                     changed = False
                     
-                    # sync even when prefix_tenant is None (clears tenant)
+                    # Sync tenant (even when prefix_tenant is None, which clears tenant)
                     if ip.tenant_id != (prefix_tenant.id if prefix_tenant else None):
-                        ip.tenant = prefix_tenant  # assigns None correctly
+                        ip.tenant = prefix_tenant
                         changed = True
                     
-                    # Update custom fields using bracket notation
+                    # Update custom fields
                     try:
                         if current_perms != prefix_permissions:
                             if hasattr(ip, "custom_field_data"):
-                                if prefix_permissions in (None, [], "", {}):
-                                    ip.custom_field_data["tenant_permissions"] = []
-                                else:
-                                    ip.custom_field_data["tenant_permissions"] = prefix_permissions
+                                ip.custom_field_data["tenant_permissions"] = prefix_permissions if prefix_permissions not in (None, [], "", {}) else []
                             else:
-                                # for older NetBox
-                                if prefix_permissions in (None, [], "", {}):
-                                    ip.cf["tenant_permissions"] = []
-                                else:
-                                    ip.cf["tenant_permissions"] = prefix_permissions
+                                ip.cf["tenant_permissions"] = prefix_permissions if prefix_permissions not in (None, [], "", {}) else []
                             changed = True
                             logger.info(f"Setting tenant_permissions to {prefix_permissions}")
                     except Exception as e:
@@ -254,15 +245,9 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     try:
                         if current_perms_ro != prefix_permissions_ro:
                             if hasattr(ip, "custom_field_data"):
-                                if prefix_permissions_ro in (None, [], "", {}):
-                                    ip.custom_field_data["tenant_permissions_ro"] = []
-                                else:
-                                    ip.custom_field_data["tenant_permissions_ro"] = prefix_permissions_ro
+                                ip.custom_field_data["tenant_permissions_ro"] = prefix_permissions_ro if prefix_permissions_ro not in (None, [], "", {}) else []
                             else:
-                                if prefix_permissions_ro in (None, [], "", {}):
-                                    ip.cf["tenant_permissions_ro"] = []
-                                else:
-                                    ip.cf["tenant_permissions_ro"] = prefix_permissions_ro
+                                ip.cf["tenant_permissions_ro"] = prefix_permissions_ro if prefix_permissions_ro not in (None, [], "", {}) else []
                             changed = True
                             logger.info(f"Setting tenant_permissions_ro to {prefix_permissions_ro}")
                     except Exception as e:
