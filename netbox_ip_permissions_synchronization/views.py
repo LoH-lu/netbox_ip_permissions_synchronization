@@ -141,12 +141,21 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 else:
                     ips_synced.append(ip_info)
 
+            vlan_needs_sync = False
+            if vlan_info is not None:
+                vlan_needs_sync = not (
+                    vlan_info.tenant_id == prefix_info.tenant_id
+                    and vlan_info.tenant_permissions == prefix_info.tenant_permissions
+                    and vlan_info.tenant_permissions_ro == prefix_info.tenant_permissions_ro
+                )
+
             return render(
                 request,
                 "netbox_ip_permissions_synchronization/ip_permissions_sync.html",
                 {
                     "prefix": prefix_info,
                     "vlan": vlan_info,
+                    "vlan_needs_sync": vlan_needs_sync,
                     "ips_to_sync": ips_to_sync,
                     "ips_synced": ips_synced,
                     "ips_total": len(ips_in_prefix),
