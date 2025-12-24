@@ -1,5 +1,5 @@
-__version__ = '0.0.16'
+__version__ = '0.0.17'
 __author__ = 'Loris Henrion'
 __author_email__ = 'loris_henrion@bce.lu'
-__description__ = 'Syncing permissions on IP Addresses with those from their corresponding Prefix in NetBox'
+__description__ = 'Syncing permissions and tenant on IP Addresses and VLANs with those from their corresponding Prefix in NetBox'
 __license__ = 'GPL-3.0'
