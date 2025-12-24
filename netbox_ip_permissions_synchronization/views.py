@@ -3,10 +3,10 @@ from django.shortcuts import render, redirect
 from django.views.generic import View
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib import messages
-from ipam.models import Prefix, IPAddress
+from ipam.models import Prefix, IPAddress, VLAN
 from ipaddress import ip_network, ip_address as ip_addr_obj
 
-from .utils import IPAddressInfo, PrefixInfo
+from .utils import IPAddressInfo, PrefixInfo, VLANInfo
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,17 @@ def get_custom_field_value(obj, field_name):
     except Exception:
         pass
     return None
+
+
+def set_custom_field_value(obj, field_name, value):
+    """Safely set a custom field on a NetBox ORM object (supports both cf and custom_field_data)."""
+    if hasattr(obj, "custom_field_data") and isinstance(obj.custom_field_data, dict):
+        obj.custom_field_data[field_name] = value
+        return True
+    if hasattr(obj, "cf") and isinstance(obj.cf, dict):
+        obj.cf[field_name] = value
+        return True
+    return False
 
 
 def safe_to_string(value):
@@ -73,7 +84,13 @@ def get_ips_in_prefix(prefix):
 
 class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
     """Synchronize IP address permissions from their parent prefix"""
-    permission_required = ("ipam.view_ipaddress", "ipam.change_ipaddress", "ipam.view_prefix")
+    permission_required = (
+        "ipam.view_ipaddress",
+        "ipam.change_ipaddress",
+        "ipam.view_prefix",
+        "ipam.view_vlan",
+        "ipam.change_vlan",
+    )
 
     def get(self, request, prefix_id):
         try:
@@ -96,6 +113,19 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 tenant_permissions_ro=safe_to_string(get_custom_field_value(prefix, "tenant_permissions_ro")),
             )
 
+            vlan_info = None
+            if getattr(prefix, "vlan", None):
+                vlan = prefix.vlan
+                vlan_info = VLANInfo(
+                    id=vlan.id,
+                    vid=getattr(vlan, "vid", None),
+                    name=getattr(vlan, "name", "") or str(vlan),
+                    tenant_id=vlan.tenant.id if getattr(vlan, "tenant", None) else None,
+                    tenant_name=vlan.tenant.name if getattr(vlan, "tenant", None) else "",
+                    tenant_permissions=safe_to_string(get_custom_field_value(vlan, "tenant_permissions")),
+                    tenant_permissions_ro=safe_to_string(get_custom_field_value(vlan, "tenant_permissions_ro")),
+                )
+
             ips_in_prefix, _ = get_ips_in_prefix(prefix)
 
             ips_to_sync = []
@@ -116,6 +146,7 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 "netbox_ip_permissions_synchronization/ip_permissions_sync.html",
                 {
                     "prefix": prefix_info,
+                    "vlan": vlan_info,
                     "ips_to_sync": ips_to_sync,
                     "ips_synced": ips_synced,
                     "ips_total": len(ips_in_prefix),
@@ -142,6 +173,35 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
             prefix_permissions = get_custom_field_value(prefix, "tenant_permissions")
             prefix_permissions_ro = get_custom_field_value(prefix, "tenant_permissions_ro")
 
+            # If the prefix has a VLAN assigned, sync the same tenant + permission fields to that VLAN as well.
+            vlan_updated = False
+            vlan_failed = False
+            if getattr(prefix, "vlan", None):
+                try:
+                    vlan = VLAN.objects.get(id=prefix.vlan.id)
+                    vlan_changed = False
+
+                    if getattr(vlan, "tenant_id", None) != (prefix_tenant.id if prefix_tenant else None):
+                        vlan.tenant = prefix_tenant
+                        vlan_changed = True
+
+                    if get_custom_field_value(vlan, "tenant_permissions") != prefix_permissions:
+                        set_custom_field_value(vlan, "tenant_permissions", prefix_permissions or [])
+                        vlan_changed = True
+                    if get_custom_field_value(vlan, "tenant_permissions_ro") != prefix_permissions_ro:
+                        set_custom_field_value(vlan, "tenant_permissions_ro", prefix_permissions_ro or [])
+                        vlan_changed = True
+
+                    if vlan_changed:
+                        vlan.save()
+                        vlan_updated = True
+                except Exception:
+                    vlan_failed = True
+                    logger.error(
+                        f"Error updating VLAN for prefix {prefix.id} (vlan={getattr(prefix.vlan, 'id', None)}):",
+                        exc_info=True,
+                    )
+
             ips_in_prefix, _ = get_ips_in_prefix(prefix)
 
             updated_count = 0
@@ -156,20 +216,12 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         ip.tenant = prefix_tenant
                         changed = True
 
-                    if hasattr(ip, "custom_field_data"):
-                        if get_custom_field_value(ip, "tenant_permissions") != prefix_permissions:
-                            ip.custom_field_data["tenant_permissions"] = prefix_permissions or []
-                            changed = True
-                        if get_custom_field_value(ip, "tenant_permissions_ro") != prefix_permissions_ro:
-                            ip.custom_field_data["tenant_permissions_ro"] = prefix_permissions_ro or []
-                            changed = True
-                    elif hasattr(ip, "cf"):
-                        if get_custom_field_value(ip, "tenant_permissions") != prefix_permissions:
-                            ip.cf["tenant_permissions"] = prefix_permissions or []
-                            changed = True
-                        if get_custom_field_value(ip, "tenant_permissions_ro") != prefix_permissions_ro:
-                            ip.cf["tenant_permissions_ro"] = prefix_permissions_ro or []
-                            changed = True
+                    if get_custom_field_value(ip, "tenant_permissions") != prefix_permissions:
+                        set_custom_field_value(ip, "tenant_permissions", prefix_permissions or [])
+                        changed = True
+                    if get_custom_field_value(ip, "tenant_permissions_ro") != prefix_permissions_ro:
+                        set_custom_field_value(ip, "tenant_permissions_ro", prefix_permissions_ro or [])
+                        changed = True
 
                     if changed:
                         ip.save()
@@ -182,8 +234,12 @@ class IPPermissionsSyncView(LoginRequiredMixin, PermissionRequiredMixin, View):
             message_parts = []
             if updated_count > 0:
                 message_parts.append(f"synchronized {updated_count} IP address(es)")
+            if vlan_updated:
+                message_parts.append("synchronized VLAN permissions")
             if failed_count > 0:
                 message_parts.append(f"failed to update {failed_count} IP address(es)")
+            if vlan_failed:
+                message_parts.append("failed to update VLAN")
 
             if message_parts:
                 messages.success(request, f"Successfully {' and '.join(message_parts)}")

@@ -44,3 +44,15 @@ class PrefixInfo:
     tenant_name: str = ""
     tenant_permissions: str = ""
     tenant_permissions_ro: str = ""
+
+
+@dataclass(frozen=True)
+class VLANInfo:
+    """Represents VLAN information and its permissions"""
+    id: int
+    vid: int = None
+    name: str = ""
+    tenant_id: int = None
+    tenant_name: str = ""
+    tenant_permissions: str = ""
+    tenant_permissions_ro: str = ""

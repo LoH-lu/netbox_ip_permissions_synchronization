@@ -37,6 +37,39 @@
     </div>
 </div>
 
+{% if vlan %}
+<div class="card mt-3">
+    <div class="card-header"><h4>Assigned VLAN Permissions</h4></div>
+    <div class="card-body">
+        {% if vlan.vid %}
+            <p><strong>VLAN:</strong> {{ vlan.name }} (VID {{ vlan.vid }})</p>
+        {% else %}
+            <p><strong>VLAN:</strong> {{ vlan.name }}</p>
+        {% endif %}
+
+        {% if vlan.tenant_id == prefix.tenant_id and vlan.tenant_permissions == prefix.tenant_permissions and vlan.tenant_permissions_ro == prefix.tenant_permissions_ro %}
+            <div class="alert alert-success mb-2">
+                <i class="mdi mdi-check-circle"></i> VLAN permissions are already synchronized with the prefix.
+            </div>
+        {% else %}
+            <div class="alert alert-warning mb-2">
+                <i class="mdi mdi-alert"></i> VLAN permissions differ from the prefix and will be synchronized when you click "Sync All IPs".
+            </div>
+        {% endif %}
+
+        <table class="table table-sm">
+            <tr><th>Current VLAN Tenant:</th><td>{% if vlan.tenant_name %}{{ vlan.tenant_name }}{% else %}<em>None</em>{% endif %}</td></tr>
+            <tr><th>Current VLAN Permissions (RW):</th>
+                <td>{% if vlan.tenant_permissions %}<span class="permission-badge">{{ vlan.tenant_permissions }}</span>{% else %}<em>Not set</em>{% endif %}</td>
+            </tr>
+            <tr><th>Current VLAN Permissions (RO):</th>
+                <td>{% if vlan.tenant_permissions_ro %}<span class="permission-badge">{{ vlan.tenant_permissions_ro }}</span>{% else %}<em>Not set</em>{% endif %}</td>
+            </tr>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 <div class="card mt-3">
     <div class="card-header"><h4>IP Addresses Status</h4></div>
     <div class="card-body">
