@@ -8,5 +8,6 @@ class Config(PluginConfig):
     version = __version__
     author = __author__
     author_email = __author_email__
+    url = __url__
 
 config = Config
