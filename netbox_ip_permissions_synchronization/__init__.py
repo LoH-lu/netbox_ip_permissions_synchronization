@@ -9,5 +9,6 @@ class Config(PluginConfig):
     author = __author__
     author_email = __author_email__
     url = __url__
+    license = __license__
 
 config = Config
