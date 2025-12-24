@@ -119,6 +119,24 @@
 <div class="alert alert-success mt-3">
     <i class="mdi mdi-check-circle"></i> All IP addresses are already synchronized with the prefix permissions!
 </div>
+
+{# If VLAN exists and differs from prefix, still allow syncing #}
+{% if vlan and not (vlan.tenant_id == prefix.tenant_id and vlan.tenant_permissions == prefix.tenant_permissions and vlan.tenant_permissions_ro == prefix.tenant_permissions_ro) %}
+<div class="card mt-3">
+    <div class="card-header"><h4>VLAN Needs Synchronization</h4></div>
+    <div class="card-body">
+        <p>The VLAN permissions differ from the prefix. You can synchronize the VLAN now (no IP changes will be made).</p>
+
+        <form method="post" class="text-right">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-success">
+                <i class="mdi mdi-sync"></i> Sync VLAN
+            </button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
 {% endif %}
 
 {% if ips_synced %}
