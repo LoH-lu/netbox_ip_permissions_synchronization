@@ -47,13 +47,13 @@
             <p><strong>VLAN:</strong> {{ vlan.name }}</p>
         {% endif %}
 
-        {% if vlan.tenant_id == prefix.tenant_id and vlan.tenant_permissions == prefix.tenant_permissions and vlan.tenant_permissions_ro == prefix.tenant_permissions_ro %}
+        {% if not vlan_needs_sync %}
             <div class="alert alert-success mb-2">
                 <i class="mdi mdi-check-circle"></i> VLAN permissions are already synchronized with the prefix.
             </div>
         {% else %}
             <div class="alert alert-warning mb-2">
-                <i class="mdi mdi-alert"></i> VLAN permissions differ from the prefix and will be synchronized when you click "Sync All IPs".
+                <i class="mdi mdi-alert"></i> VLAN permissions differ from the prefix and will be synchronized when you click "Sync All IPs" (or "Sync VLAN" below).
             </div>
         {% endif %}
 
@@ -105,6 +105,7 @@
                 {% endfor %}
             </tbody>
         </table>
+
         <div class="text-right mt-3">
             <form method="post">
                 {% csrf_token %}
@@ -120,8 +121,7 @@
     <i class="mdi mdi-check-circle"></i> All IP addresses are already synchronized with the prefix permissions!
 </div>
 
-{# If VLAN exists and differs from prefix, still allow syncing #}
-{% if vlan and not (vlan.tenant_id == prefix.tenant_id and vlan.tenant_permissions == prefix.tenant_permissions and vlan.tenant_permissions_ro == prefix.tenant_permissions_ro) %}
+{% if vlan and vlan_needs_sync %}
 <div class="card mt-3">
     <div class="card-header"><h4>VLAN Needs Synchronization</h4></div>
     <div class="card-body">
