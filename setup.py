@@ -21,7 +21,7 @@ setup(
     description=__description__,
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/LoH-lu/netbox_ip_permissions_synchronization/",
+    url=__url__,
     author=__author__,
     author_email=__author_email__,
     license=__license__,
