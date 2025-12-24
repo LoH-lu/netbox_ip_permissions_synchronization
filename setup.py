@@ -11,6 +11,7 @@ __author__ = _version_data["__author__"]
 __author_email__ = _version_data["__author_email__"]
 __description__ = _version_data["__description__"]
 __license__ = _version_data["__license__"]
+__url__ = _version_data["__url__"]
 
 with open("README.md", encoding="utf-8") as f:
     long_description = f.read()
